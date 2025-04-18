@@ -94,90 +94,52 @@ namespace FlyleafPlayer
         {
             // NOTE: Loads/Saves configs only in RELEASE mode
 
-            // Player's Config (Cannot be initialized before Engine's initialization)
-            #if RELEASE
+#if RELEASE
             // Load Player's Config
             if (File.Exists(FlyleafME.ConfigPath))
                 try { playerConfig = Config.Load(FlyleafME.ConfigPath); } catch { playerConfig = DefaultConfig(); }
             else
                 playerConfig = DefaultConfig();
-            #else
-                playerConfig = DefaultConfig();
-            #endif
-
-            #if DEBUG
-            // Testing audio filters
-            //playerConfig.Audio.Filters = new()
-            //{
-              ////new() { Name = "loudnorm", Args = "I=-24:LRA=7:TP=-2", Id = "loudnorm1" },
-              ////new() { Name = "dynaudnorm", Args = "f=4150", Id = "dynaudnorm1" },
-              ////new() { Name ="afftfilt", Args = "real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.75" }, // robot
-              ////new() { Name ="tremolo", Args="f=5:d=0.5" },
-              ////new() { Name ="vibrato", Args="f=10:d=0.5" },
-              ////new() { Name ="rubberband", Args="pitch=1.5" }
-            //};
-            #endif
+#else
+            playerConfig = DefaultConfig();
+#endif
 
             // Initializes the Player
             Player = new Player(playerConfig);
 
-            // Dispose Player on Window Close (the possible swapped player from FlyleafMe that actually belongs to us)
+            // Dispose Player on Window Close
             Closing += (o, e) => FlyleafME.Player?.Dispose();
 
-            Player.Opening      += Player_Opening;
-            Player.OpenCompleted+= Player_OpenCompleted;
+            Player.Opening += Player_Opening;
+            Player.OpenCompleted += Player_OpenCompleted;
 
-            // If the user requests reverse playback allocate more frames once
-            Player.PropertyChanged += (o, e) =>
-            {
-                if (e.PropertyName == "ReversePlayback" && !GetWindowFromPlayer(Player).ReversePlaybackChecked)
-                {
-                    if (playerConfig.Decoder.MaxVideoFrames < 80)
-                        playerConfig.Decoder.MaxVideoFrames = 80;
-
-                    GetWindowFromPlayer(Player).ReversePlaybackChecked = true;
-                }
-                else if (e.PropertyName == nameof(Player.Rotation))
-                    GetWindowFromPlayer(Player).Msg = $"Rotation {Player.Rotation}°";
-                else if (e.PropertyName == nameof(Player.Speed))
-                    GetWindowFromPlayer(Player).Msg = $"Speed x{Player.Speed}";
-                else if (e.PropertyName == nameof(Player.Zoom))
-                    GetWindowFromPlayer(Player).Msg = $"Zoom {Player.Zoom}%";
-                else if (e.PropertyName == nameof(Player.Status) && Player.Activity.Mode == ActivityMode.Idle)
-                    Player.Activity.ForceActive();
-            };
-
-            Player.Audio.PropertyChanged += (o, e) =>
-            {
-                if (e.PropertyName == nameof(Player.Audio.Volume))
-                    GetWindowFromPlayer(Player).Msg = $"Volume {Player.Audio.Volume}%";
-                else if (e.PropertyName == nameof(Player.Audio.Mute))
-                    GetWindowFromPlayer(Player).Msg = Player.Audio.Mute ? "Muted" : "Unmuted";
-            };
-
-            Player.Config.Audio.PropertyChanged += (o, e) =>
-            {
-                if (e.PropertyName == nameof(Player.Config.Audio.Delay))
-                    GetWindowFromPlayer(Player).Msg = $"Audio Delay {Player.Config.Audio.Delay / 10000}ms";
-            };
-
-            Player.Config.Subtitles.PropertyChanged += (o, e) =>
-            {
-                if (e.PropertyName == nameof(Player.Config.Subtitles.Delay))
-                    GetWindowFromPlayer(Player).Msg = $"Subs Delay {Player.Config.Subtitles.Delay / 10000}ms";
-            };
-
-            // Ctrl+ N / Ctrl + W (Open New/Close Window)
+            // Add custom key bindings
             var keys = playerConfig.Player.KeyBindings;
             keys.AddCustom(Key.N, true, () => CreateNewWindow(Player), "New Window", false, true, false);
             keys.AddCustom(Key.W, true, () => GetWindowFromPlayer(Player).Close(), "Close Window", false, true, false);
+            keys.AddCustom(Key.Space, false, () => Player.TogglePlayPause(), "Toggle Play/Pause", false, false, false);
+            keys.AddCustom(Key.Escape, false, () => Application.Current.Shutdown(), "Exit Application", false, false, false);
 
-            // We might saved the tmp keys (restore them)
+            // Restore temporary keys if saved
             if (Player.Config.Loaded && keys.Exists("tmp01"))
             {
                 SlideKeysRemove();
                 VideoKeysRestore();
             }
+
+            // Handle video end to replay
+            Player.PropertyChanged += (sender, e) =>
+            {
+                if (e.PropertyName == nameof(Player.Status) && Player.Status == Status.Ended)
+                {
+                    // Replay the video from the beginning
+                    // Fix for CS1061: 'VideoStream' does not contain a definition for 'Url'.
+                    // The 'Url' property is not defined in the 'VideoStream' class. Based on the context, it seems you are trying to access the URL of the video stream.
+                    // Instead, you should use the 'Demuxer.Url' property, which is accessible via the 'VideoDemuxer' property of the Player.
+
+                    Player.OpenAsync(Player.VideoDemuxer?.Url);
+                }
+            };
         }
 
         private static MainWindow GetWindowFromPlayer(Player player)
