@@ -68,7 +68,9 @@ namespace FlyleafPlayer
                 PreferredLandscapeWidth = 800,
                 PreferredPortraitHeight = 600
             };
-
+            
+            FlyleafME.MouseLeftButtonUp += (_, _) => Player?.TogglePlayPause();
+            FlyleafME.MouseWheel += FlyleafME_MouseWheel;
             // Allow Flyleaf WPF Control to Load UIConfig and Save both Config & UIConfig (Save button will be available in settings)
             FlyleafME.ConfigPath    = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Flyleaf.Config.json");
             FlyleafME.EnginePath    = App.EnginePath;
@@ -78,6 +80,22 @@ namespace FlyleafPlayer
 
             // Allowing FlyleafHost to access our Player
             DataContext = FlyleafME;
+        }
+
+        private void FlyleafME_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Delta == 0) return; // No change  
+
+            if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
+            {
+                if (e.Delta > 0) Player?.SeekForward();
+                else Player?.SeekBackward();
+            }
+            else
+            {
+                if (e.Delta > 0) Player?.Audio.VolumeUp();
+                else Player?.Audio.VolumeDown();
+            }
         }
 
         private Config DefaultConfig()
